@@ -12,31 +12,31 @@ from gnuradio import gr
 
 class blk(gr.sync_block):  # other base classes are basic_block, decim_block, interp_block
 
-    def __init__(self, buffer_storage = 1, samplerate = 32e3, threshold = 0.5, number_dips = 148):  # only default values here
+    def __init__(self, buffer_storage = 1, samplerate = 32e3, threshold = 0.5, number_dips = 148):  # This makes it appear on the blocks parameters. Only default values here
         """arguments to this function show up as parameters in GRC"""
-        gr.sync_block.__init__( # initialise blocks type
+        gr.sync_block.__init__( # Inherit the synchronous block type
             self,
-            name='XC0324 Temperature Decoder',   # will show up in GRC in the block
+            name='XC0324 Temperature Decoder',   # The name that will show up in GRC in the block
             in_sig=[np.float32], # input data type is a float
-            out_sig= None # to change
+            out_sig= None # This block has no output data
         )
-        self.samplerate = samplerate
-        self.threshold = threshold
-        self.number_dips = number_dips
-        self.buffer_storage = buffer_storage
+        self.samplerate = samplerate # define a sample rate variable
+        self.threshold = threshold # what magnitude will we split a pulse between high and low
+        self.number_dips = number_dips # minimum number of spaces between pulses in an entire transmission. Set to a number close to what a full transmission should be
+        self.buffer_storage = buffer_storage # creating a buffer to hold our blocks incoming samples
 	
     def work(self, input_items, output_items): # work function
     	in0 = input_items[0]
-    	sample_decisionmaker = int(self.samplerate*0.00125) # if the time between peaks is < 1250us its a 0, if larger its a 1
-    	self.buffer_storage = np.append(self.buffer_storage,in0)
-    	self.buffer_storage = self.buffer_storage[-int(self.samplerate*0.19):] # whole transmission takes 200ms so get the transmisison over this period
-    	risingedge = np.flatnonzero((self.buffer_storage[:-1] < self.threshold) & (self.buffer_storage[1:] > self.threshold))+1 #risingedge contains the locations of the threshold crossings
-    	#print(len(risingedge))
-    	if len(risingedge) > self.number_dips:
-    		a = np.diff(risingedge)
-    		binaryArray = np.where(a < sample_decisionmaker, 0, 1) 
-    		temperatureBinary = (np.array2string(np.flip(binaryArray[16:28]), separator='')[1:-1])
-    		temperatureInteger = int(temperatureBinary,2)/10 - 40
+    	sample_decisionmaker = int(self.samplerate*0.00125) # the number of samples that splits a short and long gap. If the time between peaks is < 1250us its a 0, if larger its a 1.
+    	self.buffer_storage = np.append(self.buffer_storage,in0) # Append the incoming buffer (its size is always changing), to our newly created buffer
+    	self.buffer_storage = self.buffer_storage[-int(self.samplerate*0.19):] # whole transmission takes just under 200ms so get the transmisison over this period
+    	risingedge = np.flatnonzero((self.buffer_storage[:-1] < self.threshold) & (self.buffer_storage[1:] > self.threshold)) + 1 #risingedge contains the index locations of the threshold crossings
+
+    	if len(risingedge) > self.number_dips: # if the number of threshold crossings is bigger than the minimum number of dips we specified
+    		a = np.diff(risingedge) # calculate the distances between the the threshold crossings
+    		binaryArray = np.where(a < sample_decisionmaker, 0, 1)  # decide 0 if the distance found is less than our decision maker value, else 1
+    		temperatureBinary = (np.array2string(np.flip(binaryArray[16:28]), separator='')[1:-1]) # we find the 12 bits denoting the temp, reverse them, and create a string excluding []
+    		temperatureInteger = int(temperatureBinary,2)/10 - 40 # temperature calculation
     		print('The current temperature is: ', temperatureInteger)
     	
     	return len(input_items[0])
